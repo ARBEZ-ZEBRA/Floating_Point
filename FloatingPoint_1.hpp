@@ -127,13 +127,13 @@ public:
 
     double To_decimal() const
     {
-        uint64_t bias = (1ULL << (exponent - 1)) - 1;
+        uint64_t bias = E_mask >> 1;
 
         uint64_t E = static_cast<uint64_t>(E_value & E_mask);
         if (E == 0)
         {
             double base = 0;
-            E = 1 - bias;
+            E = 1ULL - bias;
         }
         else
         {
@@ -141,12 +141,17 @@ public:
         }
 
         double M = M_value & M_mask;
-        if (E != 1 - bias)
+        if (E != 1ULL - bias)
         {
-            M += (1ULL << mantissa);
+            M += (M_mask + 1);
+        }
+        else
+        {
+            E = 0;
+            M = 0;
         }
 
-        double result = std::pow(2.0, E) * M / (1ULL << mantissa);
+        double result = std::pow(2.0, E) * M / (M_mask + 1);
 
         if (sign)
         {
@@ -160,7 +165,7 @@ public:
     {
         FloatingPoint<exponent, mantissa> result;
         result.sign = sign;
-        result.E_value = (1ULL << exponent) - 1;
+        result.E_value = ((1ULL << exponent) - 1);
         result.M_value = 0;
         result.state = Inf;
         return result;
@@ -421,7 +426,6 @@ public:
                 { // infinity
                     new_E_value = E_mask;
                     new_M_value = 0;
-                    std::cout << "n_inf" << std::endl;
                 }
                 else if (E_other + (E_mask >> 1) < 0b1 + (E_other_mask >> 1))
                 {
@@ -443,12 +447,10 @@ public:
                                 new_E_value += 1;
                                 new_M_value -= (M_mask + 1);
                             }
-                            std::cout << "n_n_1" << std::endl;
                         }
                         else
                         {
                             new_M_value = M_other;
-                            std::cout << "n_n_0" << std::endl;
                         }
                     }
                 }
@@ -456,7 +458,6 @@ public:
                 {
                     new_E_value = E_other + (E_mask >> 1) - (E_other_mask >> 1);
                     new_M_value = M_other << (mantissa - L_M);
-                    std::cout << "n_0" << std::endl;
                 }
             }
         }
@@ -471,25 +472,21 @@ public:
             { // zero
                 new_E_value = 0;
                 new_M_value = 0;
-                // std::cout << "zero" << std::endl;
             }
             else if (E_other == 0 && M_other != 0)
             { // subnormal
                 new_E_value = 0;
                 new_M_value = 0b1;
-                // std::cout << "sub" << std::endl;
             }
             else if (E_other == (E_other_mask) && M_other == 0)
             { // infinity
                 new_E_value = E_mask;
                 new_M_value = 0;
-                // std::cout << "inf" << std::endl;
             }
             else if (E_other == (E_other_mask) && M_other != 0)
             { // NAN
                 new_E_value = E_mask;
                 new_M_value = M_other >> (L_M - mantissa);
-                // std::cout << "nan" << std::endl;
             }
             else
             { // normal
@@ -497,7 +494,6 @@ public:
                 { // infinity
                     new_E_value = E_mask;
                     new_M_value = 0;
-                    // std::cout << "n_inf" << std::endl;
                 }
                 else if (E_other + (E_mask >> 1) < 0b1 + (E_other_mask >> 1))
                 {
@@ -518,12 +514,10 @@ public:
                                 new_E_value += 1;
                                 new_M_value -= (M_mask + 1);
                             }
-                            // std::cout << "n_n_1" << std::endl;
                         }
                         else
                         {
                             new_M_value = M_other >> (L_M - mantissa);
-                            // std::cout << "n_n_0" << std::endl;
                         }
                     }
                 }
@@ -537,14 +531,11 @@ public:
                         {
                             new_E_value += 1;
                             new_M_value -= (M_mask + 1);
-                            // std::cout << "n_1_0" << std::endl;
                         }
-                        // std::cout << "n_1" << std::endl;
                     }
                     else
                     {
                         new_M_value = M_other >> (L_M - mantissa);
-                        // std::cout << "n_0" << std::endl;
                     }
                 }
             }
@@ -589,6 +580,22 @@ public:
         }
     }
 
+    FloatingPoint relu() const
+    {
+        if (sign)
+        {
+            return createZero();
+        }
+        else
+        {
+            return (*this);
+        }
+    }
+    friend FloatingPoint relu(const FloatingPoint &fp)
+    {
+        return fp.relu();
+    }
+
     // Addition
     FloatingPoint add(const FloatingPoint &other) const
     {
@@ -627,12 +634,12 @@ public:
 
         // both normal case
         bool sign1 = sign;
-        int64_t exp1 = static_cast<int64_t>(E_value) - ((1ULL << (exponent - 1)) - 1);
-        uint64_t mantissa1 = (state == Subnormal) ? M_value : M_value | (1ULL << mantissa);
+        int64_t exp1 = static_cast<int64_t>(E_value) - (E_mask >> 1);
+        uint64_t mantissa1 = (state == Subnormal) ? M_value : M_value | (M_mask + 1);
 
         bool sign2 = other.sign;
-        int64_t exp2 = static_cast<int64_t>(other.E_value) - ((1ULL << (exponent - 1)) - 1);
-        uint64_t mantissa2 = (other.state == Subnormal) ? other.M_value : other.M_value | (1ULL << mantissa);
+        int64_t exp2 = static_cast<int64_t>(other.E_value) - (E_mask >> 1);
+        uint64_t mantissa2 = (other.state == Subnormal) ? other.M_value : other.M_value | (M_mask + 1);
 
         // Align exponents by shifting the smaller number's mantissa right
         int64_t exp_diff = exp1 - exp2;
@@ -691,32 +698,48 @@ public:
         }
 
         int first = findFirstOneBit(result_mantissa);
-        result_mantissa &= ((1ULL << first) - 1);
 
         if (first >= mantissa)
         {
-            if ((result_mantissa & ((1ULL << (first - mantissa)) - 1)) > 0)
+            exp1 += (first - mantissa);
+            if (exp1 >= E_mask)
             {
-                result_mantissa >>= (first - mantissa);
-                result_mantissa += 1;
+                exp1 = E_mask;
+                result_mantissa = 0;
             }
             else
             {
-                result_mantissa >>= (first - mantissa);
+                result_mantissa &= ((1ULL << first) - 1);
+                if ((result_mantissa & ((1ULL << (first - mantissa)) - 1)) > 0)
+                {
+                    result_mantissa >>= (first - mantissa);
+                    result_mantissa += 1;
+                }
+                else
+                {
+                    result_mantissa >>= (first - mantissa);
+                }
             }
-            exp1 += (first - mantissa);
         }
         else
         {
-            result_mantissa <<= (mantissa - first);
-            exp1 -= (mantissa - first);
+            if (exp1 + (E_mask >> 1) > (mantissa - first))
+            {
+                exp1 -= (mantissa - first);
+                result_mantissa <<= (mantissa - first);
+            }
+            else
+            {
+                result_mantissa <<= (exp1 + (E_mask >> 1));
+                exp1 = -(E_mask >> 1);
+            }
         }
 
         // Pack the result
         FloatingPoint<exponent, mantissa> result;
         result.sign = result_sign;
-        result.E_value = static_cast<uint64_t>(exp1 + ((1ULL << (exponent - 1)) - 1));
-        result.M_value = result_mantissa & ((1ULL << mantissa) - 1);
+        result.E_value = static_cast<uint64_t>(exp1 + (E_mask >> 1));
+        result.M_value = result_mantissa & (M_mask);
         result.state = update_state(result);
 
         return result;
