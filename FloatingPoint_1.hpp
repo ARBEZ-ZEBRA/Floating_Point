@@ -829,6 +829,171 @@ public:
         return *this;
     }
 
+    // Multiplication
+    FloatingPoint mul(const FloatingPoint &other) const
+    {
+        if (state == Nan)
+        {
+            return *this;
+        }
+        if (other.state == Nan)
+        {
+            return other;
+        }
+
+        if (state == Zero)
+        {
+            bool result_sign = sign ^ other.sign;
+            return (result_sign == sign) ? *this : (*this).neg();
+        }
+        if (other.state == Zero)
+        {
+            bool result_sign = sign ^ other.sign;
+            return (result_sign == other.sign) ? other : other.neg();
+            return other;
+        }
+
+        if (state == Inf)
+        {
+            bool result_sign = sign ^ other.sign;
+            return (result_sign == sign) ? *this : (*this).neg();
+        }
+        if (other.state == Inf)
+        {
+            bool result_sign = sign ^ other.sign;
+            return (result_sign == other.sign) ? other : other.neg();
+        }
+
+        // Normal and Subnormal
+        bool sign1 = sign;
+        int64_t exp1 = static_cast<int64_t>(E_value) - (E_mask >> 1);
+        uint64_t mantissa1 = (state == Subnormal) ? M_value : (M_value | (M_mask + 1));
+
+        bool sign2 = other.sign;
+        int64_t exp2 = static_cast<int64_t>(other.E_value) - (E_mask >> 1);
+        uint64_t mantissa2 = (other.state == Subnormal) ? other.M_value : (other.M_value | (M_mask + 1));
+
+        // Calculate result sign (XOR of input signs)
+        bool result_sign = sign1 ^ sign2;
+
+        int64_t result_exp = exp1 + exp2;
+
+        uint64_t a_low = mantissa1 & 0xFFFFFFFF;
+        uint64_t a_high = mantissa1 >> 32;
+        uint64_t b_low = mantissa2 & 0xFFFFFFFF;
+        uint64_t b_high = mantissa2 >> 32;
+
+        uint64_t p0 = a_low * b_low;
+        uint64_t p1 = a_low * b_high;
+        uint64_t p2 = a_high * b_low;
+        uint64_t p3 = a_high * b_high;
+
+        uint64_t low0 = (p0 & 0xFFFF);
+        uint64_t low1 = (p2 & 0xFFFF) + (p1 & 0xFFFF) + (p0 >> 32);
+        uint64_t high = p3 + (p2 >> 32) + (p1 >> 32) + (low1 >> 32);
+        low1 &= 0xFFFF;
+        uint64_t result_mantissa;
+        if (mantissa <= 32)
+        {
+            result_mantissa = (high << (64 - mantissa)) | (low1 << (32 - mantissa)) | (low0 >> mantissa);
+        }
+        else
+        {
+            result_mantissa = (high << (64 - mantissa)) | (low1 >> (mantissa - 32));
+        }
+
+        if (((low0 | (low1 << 32)) & M_mask) > 0)
+        {
+            result_mantissa += 1;
+        }
+
+        if ((result_mantissa & ((M_mask + 1) << 1)) > 0)
+        {
+            result_exp += 1;
+            int last = result_mantissa & 0b1;
+            result_mantissa >>= 1;
+            if (last > 0)
+            {
+                result_mantissa += 1;
+            }
+        }
+        else
+        {
+            if (result_exp + (E_mask >> 1) < 0)
+            {
+                return createZero();
+            }
+
+            int first = findFirstOneBit(result_mantissa);
+            if (first < mantissa)
+            {
+                uint64_t e = result_exp + (E_mask >> 1);
+                if (e > mantissa - first)
+                {
+                    result_exp -= (mantissa - first);
+                }
+                else
+                {
+                    result_exp = -(E_mask >> 1);
+                    result_mantissa <<= e;
+                }
+            }
+        }
+
+        if (result_exp >= ((E_mask + 1) >> 1))
+        {
+            return createInfinity(result_sign);
+        }
+
+        // Pack the result
+        FloatingPoint<exponent, mantissa> result;
+        result.sign = result_sign;
+        result.E_value = static_cast<uint64_t>(result_exp + (E_mask >> 1));
+        result.M_value = result_mantissa & (M_mask);
+        result.state = update_state(result);
+
+        return result;
+    }
+    friend FloatingPoint mul(const FloatingPoint &fp1, const FloatingPoint &fp2)
+    {
+        return fp1.mul(fp2);
+    }
+    FloatingPoint operator*(const FloatingPoint &other) const
+    {
+        return mul(other);
+    };
+    friend FloatingPoint operator*(int val, const FloatingPoint &fp)
+    {
+        return FloatingPoint(val) * fp;
+    }
+    friend FloatingPoint operator*(double val, const FloatingPoint &fp)
+    {
+        return FloatingPoint(val) * fp;
+    }
+    friend FloatingPoint operator*(const FloatingPoint &fp, int val)
+    {
+        return fp * FloatingPoint(val);
+    }
+    friend FloatingPoint operator*(const FloatingPoint &fp, double val)
+    {
+        return fp * FloatingPoint(val);
+    }
+    FloatingPoint operator*=(const FloatingPoint &other)
+    {
+        *this = mul(other);
+        return *this;
+    }
+    FloatingPoint operator*=(int val)
+    {
+        *this = mul(val);
+        return *this;
+    }
+    FloatingPoint operator*=(double val)
+    {
+        *this = mul(val);
+        return *this;
+    }
+
     // Comparison Operator
     bool operator==(const FloatingPoint &other) const
     {
