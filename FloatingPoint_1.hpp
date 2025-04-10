@@ -622,12 +622,12 @@ public:
             return other;
         }
 
-        if (state == Zero)
+        if (state == Zero || state == Subnormal)
         {
             return other;
         }
 
-        if (other.state == Zero)
+        if (other.state == Zero || state == Subnormal)
         {
             return *this;
         }
@@ -635,10 +635,16 @@ public:
         // both normal case
         bool sign1 = sign;
         int64_t exp1 = static_cast<int64_t>(E_value) - (E_mask >> 1);
+        if (state == Subnormal) {
+            exp1 += 1;
+        }
         uint64_t mantissa1 = (state == Subnormal) ? M_value : M_value | (M_mask + 1);
 
         bool sign2 = other.sign;
         int64_t exp2 = static_cast<int64_t>(other.E_value) - (E_mask >> 1);
+        if (other.state == Subnormal) {
+            exp2 += 1;
+        }
         uint64_t mantissa2 = (other.state == Subnormal) ? other.M_value : other.M_value | (M_mask + 1);
 
         // Align exponents by shifting the smaller number's mantissa right
@@ -690,7 +696,10 @@ public:
         if ((result_mantissa & ((1ULL << exp_diff) - 1)) > 0)
         {
             result_mantissa >>= exp_diff;
-            result_mantissa += 1;
+            if (result_mantissa & 1 > 0)
+            {
+                result_mantissa += 1;
+            }
         }
         else
         {
@@ -867,10 +876,16 @@ public:
         // Normal and Subnormal
         bool sign1 = sign;
         int64_t exp1 = static_cast<int64_t>(E_value) - (E_mask >> 1);
+        if (state == Subnormal) {
+            exp1 += 1;
+        }
         uint64_t mantissa1 = (state == Subnormal) ? M_value : (M_value | (M_mask + 1));
 
         bool sign2 = other.sign;
         int64_t exp2 = static_cast<int64_t>(other.E_value) - (E_mask >> 1);
+        if (other.state == Subnormal) [
+            exp2 += 1;
+        ]
         uint64_t mantissa2 = (other.state == Subnormal) ? other.M_value : (other.M_value | (M_mask + 1));
 
         // Calculate result sign (XOR of input signs)
@@ -912,7 +927,7 @@ public:
             result_exp += 1;
             int last = result_mantissa & 0b1;
             result_mantissa >>= 1;
-            if (last > 0)
+            if ((last > 0) && (result_mantissa & 0b1 > 0))
             {
                 result_mantissa += 1;
             }
