@@ -24,12 +24,12 @@ int main()
     Half halfValue(d);
     halfValue.print_state();
 
-    Double test(f);
+    CA25 test(f);
     test.print_state();
     test += doubleValue;
     test.print_state();
 
-    Double halfValue1 = p;
+    CA25 halfValue1 = p;
     test += halfValue1;
     test.print_state();
 
@@ -37,9 +37,8 @@ int main()
     test.print_state();
 
     // Float t = test.exp();
-    Double t = test.exp();
+    CA25 t = test.exp();
     t.print_state();
 
-    std::cout << std::exp(6);
     return 0;
 }

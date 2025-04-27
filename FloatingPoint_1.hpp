@@ -562,6 +562,8 @@ public:
     template <int Newexponent, int Newmantissa>
     FloatingPoint<Newexponent, Newmantissa> Trans_(int L_E, int L_M, uint64_t bin_value) const
     {
+        uint64_t E_new_mask = (0b1ULL << Newexponent) - 1;
+        uint64_t M_new_mask = (0b1ULL << Newmantissa) - 1;
         int L_S = 1;
         uint64_t S_other_mask = (0b1ULL << L_S) - 1;
         uint64_t E_other_mask = (0b1ULL << L_E) - 1;
@@ -585,17 +587,17 @@ public:
             }
             else if (E_other == (E_other_mask) && M_other == 0)
             { // infinity
-                new_E_value = E_mask;
+                new_E_value = E_new_mask;
                 new_M_value = 0;
             }
             else if (E_other == (E_other_mask) && M_other != 0)
             { // NAN
-                new_E_value = E_mask;
+                new_E_value = E_new_mask;
                 new_M_value = M_other << (Newmantissa - L_M);
             }
             else
             { // normal
-                new_E_value = E_other + (E_mask >> 1) - (E_other_mask >> 1);
+                new_E_value = E_other + (E_new_mask >> 1) - (E_other_mask >> 1);
                 new_M_value = M_other << (Newmantissa - L_M);
             }
         }
@@ -613,24 +615,24 @@ public:
             }
             else if (E_other == (E_other_mask) && M_other == 0)
             { // infinity
-                new_E_value = E_mask;
+                new_E_value = E_new_mask;
                 new_M_value = 0;
             }
             else if (E_other == (E_other_mask) && M_other != 0)
             { // NAN
-                new_E_value = E_mask;
+                new_E_value = E_new_mask;
                 new_M_value = M_other >> (L_M - Newmantissa);
             }
             else
             { // normal
-                new_E_value = E_other + (E_mask >> 1) - (E_other_mask >> 1);
+                new_E_value = E_other + (E_new_mask >> 1) - (E_other_mask >> 1);
                 if ((M_other & ((0b1ULL << (L_M - Newmantissa)) - 1)) != 0)
                 {
                     new_M_value = (M_other >> (L_M - Newmantissa)) + 1;
-                    if (new_M_value > M_mask)
+                    if (new_M_value > M_new_mask)
                     {
                         new_E_value += 1;
-                        new_M_value -= (M_mask + 1);
+                        new_M_value -= (M_new_mask + 1);
                     }
                 }
                 else
@@ -653,40 +655,40 @@ public:
             }
             else if (E_other == (E_other_mask) && M_other == 0)
             { // infinity
-                new_E_value = E_mask;
+                new_E_value = E_new_mask;
                 new_M_value = 0;
             }
             else if (E_other == (E_other_mask) && M_other != 0)
             { // NAN
-                new_E_value = E_mask;
+                new_E_value = E_new_mask;
                 new_M_value = M_other << (Newmantissa - L_M);
             }
             else
             { // normal
-                if (E_other > (E_mask >> 1) + (E_other_mask >> 1))
+                if (E_other > (E_new_mask >> 1) + (E_other_mask >> 1))
                 { // infinity
-                    new_E_value = E_mask;
+                    new_E_value = E_new_mask;
                     new_M_value = 0;
                 }
-                else if (E_other + (E_mask >> 1) < 0b1 + (E_other_mask >> 1))
+                else if (E_other + (E_new_mask >> 1) < 0b1 + (E_other_mask >> 1))
                 {
                     new_E_value = 0;
-                    if ((E_other_mask >> 1) - E_other >= Newmantissa + (E_mask >> 1))
+                    if ((E_other_mask >> 1) - E_other >= Newmantissa + (E_new_mask >> 1))
                     { // subnormal
                         new_M_value = 0b1;
                     }
                     else
                     { // normal
                         M_other <<= (Newmantissa - L_M);
-                        uint64_t temp = (M_other >> 1) | ((M_mask >> 1) + 1);
-                        M_other = temp >> ((E_other_mask >> 1) - E_other - (E_mask >> 1));
-                        if (temp > (M_other << ((E_other_mask >> 1) - E_other - (E_mask >> 1))))
+                        uint64_t temp = (M_other >> 1) | ((M_new_mask >> 1) + 1);
+                        M_other = temp >> ((E_other_mask >> 1) - E_other - (E_new_mask >> 1));
+                        if (temp > (M_other << ((E_other_mask >> 1) - E_other - (E_new_mask >> 1))))
                         {
                             new_M_value = M_other + 1;
-                            if (new_M_value > M_mask)
+                            if (new_M_value > M_new_mask)
                             {
                                 new_E_value += 1;
-                                new_M_value -= (M_mask + 1);
+                                new_M_value -= (M_new_mask + 1);
                             }
                         }
                         else
@@ -697,7 +699,7 @@ public:
                 }
                 else
                 {
-                    new_E_value = E_other + (E_mask >> 1) - (E_other_mask >> 1);
+                    new_E_value = E_other + (E_new_mask >> 1) - (E_other_mask >> 1);
                     new_M_value = M_other << (Newmantissa - L_M);
                 }
             }
@@ -721,39 +723,39 @@ public:
             }
             else if (E_other == (E_other_mask) && M_other == 0)
             { // infinity
-                new_E_value = E_mask;
+                new_E_value = E_new_mask;
                 new_M_value = 0;
             }
             else if (E_other == (E_other_mask) && M_other != 0)
             { // NAN
-                new_E_value = E_mask;
+                new_E_value = E_new_mask;
                 new_M_value = M_other >> (L_M - Newmantissa);
             }
             else
             { // normal
-                if (E_other > (E_mask >> 1) + (E_other_mask >> 1))
+                if (E_other > (E_new_mask >> 1) + (E_other_mask >> 1))
                 { // infinity
-                    new_E_value = E_mask;
+                    new_E_value = E_new_mask;
                     new_M_value = 0;
                 }
-                else if (E_other + (E_mask >> 1) < 0b1 + (E_other_mask >> 1))
+                else if (E_other + (E_new_mask >> 1) < 0b1 + (E_other_mask >> 1))
                 {
                     new_E_value = 0;
-                    if ((E_other_mask >> 1) - E_other >= Newmantissa + (E_mask >> 1))
+                    if ((E_other_mask >> 1) - E_other >= Newmantissa + (E_new_mask >> 1))
                     { // subnormal
                         new_M_value = 0b1;
                     }
                     else
                     { // normal
                         uint64_t temp = (M_other >> 1) | ((M_other_mask >> 1) + 1);
-                        M_other = temp >> ((E_other_mask >> 1) - E_other - (E_mask >> 1));
-                        if (((M_other & ((0b1ULL << (L_M - Newmantissa)) - 1)) != 0) || (temp > (M_other << ((E_other_mask >> 1) - E_other - (E_mask >> 1)))))
+                        M_other = temp >> ((E_other_mask >> 1) - E_other - (E_new_mask >> 1));
+                        if (((M_other & ((0b1ULL << (L_M - Newmantissa)) - 1)) != 0) || (temp > (M_other << ((E_other_mask >> 1) - E_other - (E_new_mask >> 1)))))
                         {
                             new_M_value = (M_other >> (L_M - Newmantissa)) + 1;
-                            if (new_M_value > M_mask)
+                            if (new_M_value > M_new_mask)
                             {
                                 new_E_value += 1;
-                                new_M_value -= (M_mask + 1);
+                                new_M_value -= (M_new_mask + 1);
                             }
                         }
                         else
@@ -764,14 +766,14 @@ public:
                 }
                 else
                 {
-                    new_E_value = E_other + (E_mask >> 1) - (E_other_mask >> 1);
+                    new_E_value = E_other + (E_new_mask >> 1) - (E_other_mask >> 1);
                     if ((M_other & ((0b1ULL << (L_M - Newmantissa)) - 1)) != 0)
                     {
                         new_M_value = (M_other >> (L_M - Newmantissa)) + 1;
-                        if (new_M_value > M_mask)
+                        if (new_M_value > M_new_mask)
                         {
                             new_E_value += 1;
-                            new_M_value -= (M_mask + 1);
+                            new_M_value -= (M_new_mask + 1);
                         }
                     }
                     else
@@ -826,16 +828,22 @@ public:
         if (mantissa + exponent > 32)
         {
             FloatingPoint<11, 52> Temp = this->template Trans_<11, 52>(exponent, mantissa, Bin(*this));
-            double ex = std::exp(binary64_to_double(Bin(Temp)));
+            double ex = binary64_to_double(Bin(Temp));
+            ex = std::exp(ex);
             return FloatingPoint(ex);
         }
         else
         {
             FloatingPoint<8, 23> Temp = this->template Trans_<8, 23>(exponent, mantissa, Bin(*this));
-            float ex = std::exp(binary32_to_float(Bin(Temp)));
+            float ex = binary32_to_float(Bin(Temp));
+            std::cout << std::bitset<32>(Bin(Temp)) << std::endl;
+            ex = std::exp(ex);
             return FloatingPoint(ex);
         }
     }
+    friend FloatingPoint exp(const FloatingPoint& fp) {
+        return fp.exp();
+    };
 
     FloatingPoint relu() const
     {
@@ -1147,7 +1155,7 @@ public:
             exp2 += 1;
         }
         uint64_t mantissa2 = (other.state == Subnormal) ? other.M_value : (other.M_value | (M_mask + 1));
-
+        
         // Calculate result sign (XOR of input signs)
         bool result_sign = sign1 ^ sign2;
 
@@ -1162,19 +1170,22 @@ public:
         uint64_t p1 = a_low * b_high;
         uint64_t p2 = a_high * b_low;
         uint64_t p3 = a_high * b_high;
-
-        uint64_t low0 = (p0 & 0xFFFF);
-        uint64_t low1 = (p2 & 0xFFFF) + (p1 & 0xFFFF) + (p0 >> 32);
-        uint64_t high = p3 + (p2 >> 32) + (p1 >> 32) + (low1 >> 32);
-        low1 &= 0xFFFF;
+        
+        uint64_t low0 = (p0 & 0xFFFFFFFF);
+        uint64_t low1 = (p2 & 0xFFFFFFFF) + (p1 & 0xFFFFFFFF) + (p0 >> 32);
+        uint64_t high0 = (p3 & 0xFFFFFFFF) + (p2 >> 32) + (p1 >> 32) + (low1 >> 32);
+        low1 &= 0xFFFFFFFF;
+        uint64_t high1 = (p3 >> 32) + (high0 >> 32);
+        high0 &= 0xFFFFFFFF;
+        
         uint64_t result_mantissa;
         if (mantissa <= 32)
         {
-            result_mantissa = (high << (64 - mantissa)) | (low1 << (32 - mantissa)) | (low0 >> mantissa);
+            result_mantissa = (high0 << (64 - mantissa)) | (low1 << (32 - mantissa)) | (low0 >> mantissa);
         }
         else
         {
-            result_mantissa = (high << (64 - mantissa)) | (low1 >> (mantissa - 32));
+            result_mantissa = (high1 << (96 - mantissa)) | (high0 << (64 - mantissa)) | (low1 >> (mantissa - 32));
         }
 
         if (((low0 | (low1 << 32)) & M_mask) > 0)
@@ -1194,15 +1205,16 @@ public:
         }
         else
         {
-            if (result_exp + (E_mask >> 1) < 0)
+            if ((result_exp + (E_mask >> 1)) < 0)
             {
                 return createZero();
             }
-
+            
             int first = findFirstOneBit(result_mantissa);
             if (first < mantissa)
             {
                 uint64_t e = result_exp + (E_mask >> 1);
+                
                 if (e > mantissa - first)
                 {
                     result_exp -= (mantissa - first);
@@ -1215,11 +1227,15 @@ public:
             }
         }
 
-        if (result_exp >= ((E_mask + 1) >> 1))
+        if (result_exp + (E_mask >> 1) < 0)
+        {
+            return createZero();
+        }
+        if (result_exp + (E_mask >> 1) >= E_mask)
         {
             return createInfinity(result_sign);
         }
-
+        
         // Pack the result
         FloatingPoint<exponent, mantissa> result;
         result.sign = result_sign;
