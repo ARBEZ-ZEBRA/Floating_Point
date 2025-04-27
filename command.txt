@@ -1,0 +1,2 @@
+g++ UnitTests/10_TypeTest_1.cpp -o test 
+./test 

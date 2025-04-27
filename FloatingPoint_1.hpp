@@ -25,6 +25,22 @@ int findFirstOneBit(uint64_t bin_value)
     return 63 - __builtin_clzll(bin_value);
 }
 
+// 1,8,23表示的floatingpoint转换为float
+float binary32_to_float(uint32_t binary)
+{
+    float result;
+    memcpy(&result, &binary, sizeof(float));
+    return result;
+}
+
+// 1,11,52表示的floatingpoint转换为double
+double binary64_to_double(uint64_t binary)
+{
+    double result;
+    memcpy(&result, &binary, sizeof(double));
+    return result;
+}
+
 template <int exponent, int mantissa>
 class FloatingPoint
 {
@@ -183,7 +199,7 @@ public:
 
     // change the floatingpoint into binary form
     template <int other_exponent, int other_mantissa>
-    uint64_t Bin(FloatingPoint<other_exponent, other_mantissa> value)
+    uint64_t Bin(FloatingPoint<other_exponent, other_mantissa> value) const
     {
         uint64_t result = (value.get_sign() << (value.get_E_length() + value.get_M_length())) |
                           ((value.get_E_value()) << value.get_M_length()) |
@@ -543,6 +559,231 @@ public:
         return FloatingPoint(new_sign, new_E_value, new_M_value);
     }
 
+    template <int Newexponent, int Newmantissa>
+    FloatingPoint<Newexponent, Newmantissa> Trans_(int L_E, int L_M, uint64_t bin_value) const
+    {
+        int L_S = 1;
+        uint64_t S_other_mask = (0b1ULL << L_S) - 1;
+        uint64_t E_other_mask = (0b1ULL << L_E) - 1;
+        uint64_t M_other_mask = (0b1ULL << L_M) - 1;
+        bool new_sign = (bin_value >> (L_E + L_M)) & S_other_mask;
+        uint64_t E_other = (bin_value >> L_M) & E_other_mask;
+        uint64_t M_other = bin_value & M_other_mask;
+        uint64_t new_E_value, new_M_value;
+
+        if (Newexponent > L_E && Newmantissa >= L_M)
+        {
+            if (E_other == 0 && M_other == 0)
+            { // zero
+                new_E_value = 0;
+                new_M_value = 0;
+            }
+            else if (E_other == 0 && M_other != 0)
+            { // subnormal
+                new_E_value = 0;
+                new_M_value = M_other << (Newmantissa - L_M);
+            }
+            else if (E_other == (E_other_mask) && M_other == 0)
+            { // infinity
+                new_E_value = E_mask;
+                new_M_value = 0;
+            }
+            else if (E_other == (E_other_mask) && M_other != 0)
+            { // NAN
+                new_E_value = E_mask;
+                new_M_value = M_other << (Newmantissa - L_M);
+            }
+            else
+            { // normal
+                new_E_value = E_other + (E_mask >> 1) - (E_other_mask >> 1);
+                new_M_value = M_other << (Newmantissa - L_M);
+            }
+        }
+        else if (Newexponent > L_E && Newmantissa < L_M)
+        {
+            if (E_other == 0 && M_other == 0)
+            { // zero
+                new_E_value = 0;
+                new_M_value = 0;
+            }
+            else if (E_other == 0 && M_other != 0)
+            { // subnormal
+                new_E_value = 0;
+                new_M_value = M_other >> (L_M - Newmantissa);
+            }
+            else if (E_other == (E_other_mask) && M_other == 0)
+            { // infinity
+                new_E_value = E_mask;
+                new_M_value = 0;
+            }
+            else if (E_other == (E_other_mask) && M_other != 0)
+            { // NAN
+                new_E_value = E_mask;
+                new_M_value = M_other >> (L_M - Newmantissa);
+            }
+            else
+            { // normal
+                new_E_value = E_other + (E_mask >> 1) - (E_other_mask >> 1);
+                if ((M_other & ((0b1ULL << (L_M - Newmantissa)) - 1)) != 0)
+                {
+                    new_M_value = (M_other >> (L_M - Newmantissa)) + 1;
+                    if (new_M_value > M_mask)
+                    {
+                        new_E_value += 1;
+                        new_M_value -= (M_mask + 1);
+                    }
+                }
+                else
+                {
+                    new_M_value = M_other >> (L_M - Newmantissa);
+                }
+            }
+        }
+        else if (Newexponent < L_E && Newmantissa >= L_M)
+        {
+            if (E_other == 0 && M_other == 0)
+            { // zero
+                new_E_value = 0;
+                new_M_value = 0;
+            }
+            else if (E_other == 0 && M_other != 0)
+            { // subnormal
+                new_E_value = 0;
+                new_M_value = M_other << (Newmantissa - L_M);
+            }
+            else if (E_other == (E_other_mask) && M_other == 0)
+            { // infinity
+                new_E_value = E_mask;
+                new_M_value = 0;
+            }
+            else if (E_other == (E_other_mask) && M_other != 0)
+            { // NAN
+                new_E_value = E_mask;
+                new_M_value = M_other << (Newmantissa - L_M);
+            }
+            else
+            { // normal
+                if (E_other > (E_mask >> 1) + (E_other_mask >> 1))
+                { // infinity
+                    new_E_value = E_mask;
+                    new_M_value = 0;
+                }
+                else if (E_other + (E_mask >> 1) < 0b1 + (E_other_mask >> 1))
+                {
+                    new_E_value = 0;
+                    if ((E_other_mask >> 1) - E_other >= Newmantissa + (E_mask >> 1))
+                    { // subnormal
+                        new_M_value = 0b1;
+                    }
+                    else
+                    { // normal
+                        M_other <<= (Newmantissa - L_M);
+                        uint64_t temp = (M_other >> 1) | ((M_mask >> 1) + 1);
+                        M_other = temp >> ((E_other_mask >> 1) - E_other - (E_mask >> 1));
+                        if (temp > (M_other << ((E_other_mask >> 1) - E_other - (E_mask >> 1))))
+                        {
+                            new_M_value = M_other + 1;
+                            if (new_M_value > M_mask)
+                            {
+                                new_E_value += 1;
+                                new_M_value -= (M_mask + 1);
+                            }
+                        }
+                        else
+                        {
+                            new_M_value = M_other;
+                        }
+                    }
+                }
+                else
+                {
+                    new_E_value = E_other + (E_mask >> 1) - (E_other_mask >> 1);
+                    new_M_value = M_other << (Newmantissa - L_M);
+                }
+            }
+        }
+        else if (L_E == Newexponent && L_M == Newmantissa)
+        {
+            new_E_value = E_other;
+            new_M_value = M_other;
+        }
+        else
+        {
+            if (E_other == 0 && M_other == 0)
+            { // zero
+                new_E_value = 0;
+                new_M_value = 0;
+            }
+            else if (E_other == 0 && M_other != 0)
+            { // subnormal
+                new_E_value = 0;
+                new_M_value = 0b1;
+            }
+            else if (E_other == (E_other_mask) && M_other == 0)
+            { // infinity
+                new_E_value = E_mask;
+                new_M_value = 0;
+            }
+            else if (E_other == (E_other_mask) && M_other != 0)
+            { // NAN
+                new_E_value = E_mask;
+                new_M_value = M_other >> (L_M - Newmantissa);
+            }
+            else
+            { // normal
+                if (E_other > (E_mask >> 1) + (E_other_mask >> 1))
+                { // infinity
+                    new_E_value = E_mask;
+                    new_M_value = 0;
+                }
+                else if (E_other + (E_mask >> 1) < 0b1 + (E_other_mask >> 1))
+                {
+                    new_E_value = 0;
+                    if ((E_other_mask >> 1) - E_other >= Newmantissa + (E_mask >> 1))
+                    { // subnormal
+                        new_M_value = 0b1;
+                    }
+                    else
+                    { // normal
+                        uint64_t temp = (M_other >> 1) | ((M_other_mask >> 1) + 1);
+                        M_other = temp >> ((E_other_mask >> 1) - E_other - (E_mask >> 1));
+                        if (((M_other & ((0b1ULL << (L_M - Newmantissa)) - 1)) != 0) || (temp > (M_other << ((E_other_mask >> 1) - E_other - (E_mask >> 1)))))
+                        {
+                            new_M_value = (M_other >> (L_M - Newmantissa)) + 1;
+                            if (new_M_value > M_mask)
+                            {
+                                new_E_value += 1;
+                                new_M_value -= (M_mask + 1);
+                            }
+                        }
+                        else
+                        {
+                            new_M_value = M_other >> (L_M - Newmantissa);
+                        }
+                    }
+                }
+                else
+                {
+                    new_E_value = E_other + (E_mask >> 1) - (E_other_mask >> 1);
+                    if ((M_other & ((0b1ULL << (L_M - Newmantissa)) - 1)) != 0)
+                    {
+                        new_M_value = (M_other >> (L_M - Newmantissa)) + 1;
+                        if (new_M_value > M_mask)
+                        {
+                            new_E_value += 1;
+                            new_M_value -= (M_mask + 1);
+                        }
+                    }
+                    else
+                    {
+                        new_M_value = M_other >> (L_M - Newmantissa);
+                    }
+                }
+            }
+        }
+        return FloatingPoint<Newexponent, Newmantissa>(new_sign, new_E_value, new_M_value);
+    }
+
     /* Unary Operation */
     FloatingPoint neg() const
     {
@@ -577,6 +818,22 @@ public:
         }
         else
         {
+        }
+    }
+
+    FloatingPoint exp() const
+    {
+        if (mantissa + exponent > 32)
+        {
+            FloatingPoint<11, 52> Temp = this->template Trans_<11, 52>(exponent, mantissa, Bin(*this));
+            double ex = std::exp(binary64_to_double(Bin(Temp)));
+            return FloatingPoint(ex);
+        }
+        else
+        {
+            FloatingPoint<8, 23> Temp = this->template Trans_<8, 23>(exponent, mantissa, Bin(*this));
+            float ex = std::exp(binary32_to_float(Bin(Temp)));
+            return FloatingPoint(ex);
         }
     }
 
@@ -635,14 +892,16 @@ public:
         // both normal case
         bool sign1 = sign;
         int64_t exp1 = static_cast<int64_t>(E_value) - (E_mask >> 1);
-        if (state == Subnormal) {
+        if (state == Subnormal)
+        {
             exp1 += 1;
         }
         uint64_t mantissa1 = (state == Subnormal) ? M_value : M_value | (M_mask + 1);
 
         bool sign2 = other.sign;
         int64_t exp2 = static_cast<int64_t>(other.E_value) - (E_mask >> 1);
-        if (other.state == Subnormal) {
+        if (other.state == Subnormal)
+        {
             exp2 += 1;
         }
         uint64_t mantissa2 = (other.state == Subnormal) ? other.M_value : other.M_value | (M_mask + 1);
@@ -859,7 +1118,6 @@ public:
         {
             bool result_sign = sign ^ other.sign;
             return (result_sign == other.sign) ? other : other.neg();
-            return other;
         }
 
         if (state == Inf)
@@ -876,16 +1134,18 @@ public:
         // Normal and Subnormal
         bool sign1 = sign;
         int64_t exp1 = static_cast<int64_t>(E_value) - (E_mask >> 1);
-        if (state == Subnormal) {
+        if (state == Subnormal)
+        {
             exp1 += 1;
         }
         uint64_t mantissa1 = (state == Subnormal) ? M_value : (M_value | (M_mask + 1));
 
         bool sign2 = other.sign;
         int64_t exp2 = static_cast<int64_t>(other.E_value) - (E_mask >> 1);
-        if (other.state == Subnormal) [
+        if (other.state == Subnormal)
+        {
             exp2 += 1;
-        ]
+        }
         uint64_t mantissa2 = (other.state == Subnormal) ? other.M_value : (other.M_value | (M_mask + 1));
 
         // Calculate result sign (XOR of input signs)
